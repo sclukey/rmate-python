@@ -42,9 +42,8 @@ def handle_save(textmate, variables, data):
 		file = open(path, 'wb')
 		file.write(data)
 		if os.path.isfile(backup_path): os.remove(backup_path)
-	except:
-		error = 'message here'
-		log("Save failed! %s" % error)
+	except (IOError, OSError) as e:
+		log("Save failed! %s" % e.strerror)
 
 def handle_close(textmate, variables, data):
 	path = variables['token']
@@ -67,15 +66,30 @@ def handle_cmd(textmate, cmd):
 	if   cmd == 'save':  handle_save(textmate, variables, data)
 	elif cmd == 'close': handle_close(textmate, variables, data)
 
-def connect_and_handle_cmds(host, port, cmds):
+def connect_to_tm():
+	try:
+		socket.setdefaulttimeout(5)
+		textmate_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		textmate_sock.connect((settings.host, settings.port))
+		textmate_sock.setblocking(True)
+		textmate = textmate_sock.makefile('rwb')
+	except socket.error as e:
+		sys.stderr.write("Error connecting to TextMate! %s\n" % e)
+		exit(1)
+
+	server_info = dec(textmate.readline())
+
+	if server_info.strip() == "":
+		sys.stderr.write("Couldn't connect to TextMate!\n")
+		exit(1)
+
+	log('Connect: %s' % server_info)
+	
+	return textmate
+
+def handle_cmds(textmate, host, port, cmds):
 	if len(cmds) == 0: return
 
-	textmate_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-	textmate_sock.connect((settings.host, settings.port))
-	textmate_sock.setblocking(True)
-	textmate = textmate_sock.makefile('rwb')
-	server_info = dec(textmate.readline())
-	log('Connect: %s' % server_info)
 	for cmd in cmds: cmd.send(textmate)
 	textmate.write(enc('.\n'))
 
@@ -83,7 +97,6 @@ def connect_and_handle_cmds(host, port, cmds):
 	for command in textmate:
 		handle_cmd(textmate, dec(command).strip())
 	textmate.close()
-	textmate_sock.close()
 	log('Done')
 
 class Parser(configparser.ConfigParser):
@@ -180,6 +193,7 @@ settings = parser.parse_args()
 host = settings.host
 if host == 'auto' and os.environ.get('SSH_CONNECTION') != None:
 	host = os.getenv('SSH_CONNECTION', 'localhost').split(' ')[0]
+settings.host = host
 settings.port = port
 
 # Build the commands and send them
@@ -217,7 +231,9 @@ for idx, path in enumerate(settings.file):
 		cmd['data'] = "0"
 	cmds.append(cmd)
 
+s = connect_to_tm()
+
 if not settings.wait and os.fork():
 	sys.exit()
 
-connect_and_handle_cmds(settings.host, settings.port, cmds)
+handle_cmds(s, settings.host, settings.port, cmds)
