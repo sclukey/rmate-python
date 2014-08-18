@@ -1,0 +1,223 @@
+#!/usr/bin/env python
+
+import argparse
+import os
+import socket
+import sys
+import shutil
+
+if sys.version_info >= (3,0):
+	import configparser
+	import io as ioio
+else:
+	import ConfigParser as configparser
+	import StringIO as ioio
+
+DATE    = '2014-08-15'
+VERSION = "1.0.0"
+
+def log(msg):
+	if settings.verbose:
+		sys.stderr.write(msg.strip() + '\n')
+
+def enc(string):
+	if sys.version_info >= (3,0):
+		return bytes(string, 'utf-8')
+	else:
+		return string
+
+def dec(byte_string):
+	if sys.version_info >= (3,0):
+		return str(byte_string, 'utf-8')
+	else:
+		return byte_string
+
+def handle_save(textmate, variables, data):
+	path = variables['token']
+	try:
+		log('Saving %s' % path)
+		backup_path = '%s~' % path
+		while os.path.isfile(backup_path): backup_path = '%s~' % backup_path
+		if os.path.isfile(path): shutil.copy2(path, backup_path)
+		file = open(path, 'wb')
+		file.write(data)
+		if os.path.isfile(backup_path): os.remove(backup_path)
+	except:
+		error = 'message here'
+		log("Save failed! %s" % error)
+
+def handle_close(textmate, variables, data):
+	path = variables['token']
+	log("Closed %s" % path)
+
+def handle_cmd(textmate, cmd):
+	variables = {}
+	data = b''
+	for line in textmate:
+		line = dec(line)
+		if line.strip() == "": break
+		s = line.split(': ', 2)
+		name = s[0].strip()
+		value = s[1].strip()
+		variables[name] = value
+		if name == 'data':
+			data += textmate.read(int(value))
+
+	if 'data' in variables: del variables['data']
+	if   cmd == 'save':  handle_save(textmate, variables, data)
+	elif cmd == 'close': handle_close(textmate, variables, data)
+
+def connect_and_handle_cmds(host, port, cmds):
+	if len(cmds) == 0: return
+
+	textmate_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+	textmate_sock.connect((settings.host, settings.port))
+	textmate_sock.setblocking(True)
+	textmate = textmate_sock.makefile('rwb')
+	server_info = dec(textmate.readline())
+	log('Connect: %s' % server_info)
+	for cmd in cmds: cmd.send(textmate)
+	textmate.write(enc('.\n'))
+
+	textmate.flush()
+	for command in textmate:
+		handle_cmd(textmate, dec(command).strip())
+	textmate.close()
+	textmate_sock.close()
+	log('Done')
+
+class Parser(configparser.ConfigParser):
+	def read(self, filenames):
+		if isinstance(filenames, str):
+			filenames = [filenames]
+		read_ok = []
+		for filename in filenames:
+			try:
+				with open(filename) as file:
+					fp = ioio.StringIO("[NOSECTION]\n" + file.read())
+					self._read(fp, filename)
+			except:
+				continue
+			read_ok.append(filename)
+		return read_ok
+
+class Command:
+	def __init__(self, command):
+		self.command = command
+		self.variables = {}
+		self.data = None
+		self.size = None
+
+	def __setitem__(self, index, value):
+		self.variables[index] = value
+
+	def read_stdin(self):
+		self.data = sys.stdin.read()
+		self.size = len(self.data)
+
+	def read_file(self, path):
+		file = open(path, 'rb')
+		self.data = file.read()
+		self.size = file.tell()
+		file.close()
+
+	def send(self, textmate):
+		textmate.write(enc(self.command + '\n'))
+		for name in self.variables.keys():
+			value = self.variables[name]
+			textmate.write(enc('%s: %s\n' % (name, value)))
+		if self.data != None:
+			textmate.write(enc('data: %d\n' % self.size))
+			textmate.write(self.data)
+		textmate.write(enc('\n'))
+
+## MAIN ##
+
+# Default settings
+host = 'localhost'
+port = 52698
+
+# Disk settings
+config = Parser()
+try:
+	config.read(['/etc/rmate.rc', os.path.expanduser('~/.rmate.rc')])
+except:
+	sys.stderr.write('Could not read settings from disk.\n')
+if config.has_option('NOSECTION', 'host'): host = config.get('NOSECTION', 'host')
+if config.has_option('NOSECTION', 'port'): port = config.get('NOSECTION', 'port')
+
+# Environment settings
+host = os.getenv('RMATE_HOST', host)
+port = os.getenv('RMATE_PORT', port)
+
+# CLI settings
+parser = argparse.ArgumentParser(description='Activate TextMate from an SSH session', add_help=False)
+parser.add_argument('--host', default=host,
+                        help='Connect to host. Use \'auto\' to detect the host from SSH. Defaults to %s' % host)
+parser.add_argument('-p', '--port', type=int,
+                        help='Port number to use for connection. Defaults to %d' % port)
+parser.add_argument('-w', '--wait', action='store_true',
+                        help='Wait for file to be closed by TextMate.')
+parser.add_argument('-l', '--line', default=[], nargs='+', type=int, metavar='NUMBER',
+                        help='Place caret on line [NUMBER] after loading file.')
+parser.add_argument('-m', '--name', default=[], nargs='+',
+                        help='The display name shown in TextMate')
+parser.add_argument('-t', '--type', default=[], nargs='+', metavar='TYPE',
+                        help='Treat file as having [TYPE]')
+parser.add_argument('-f', '--force', action='store_true',
+                        help='Open even if the file is not writable.')
+parser.add_argument('-v', '--verbose', action='store_true',
+                        help='Verbose logging messages.')
+parser.add_argument('-h', '--help', action='help',
+                        help='Show this message.')
+parser.add_argument('--version', action='version', version=('rmate version %s (%s)' % (VERSION, DATE)),
+                        help='Show version.')
+parser.add_argument('file', nargs='*',
+                        help='File to open')
+settings = parser.parse_args()
+
+# Handle 'auto' host
+host = settings.host
+if host == 'auto' and os.environ.get('SSH_CONNECTION') != None:
+	host = os.getenv('SSH_CONNECTION', 'localhost').split(' ')[0]
+settings.port = port
+
+# Build the commands and send them
+cmds = []
+for idx, path in enumerate(settings.file):
+	if path == '-' and os.isatty(sys.stdin):
+		sys.stderr.write('Reading from stdin, press ^D to stop\n')
+	elif os.path.isdir(path):
+		sys.stderr.write("'%s' is a directory!\n" % path)
+		continue
+	elif os.path.isfile(path) and not os.access(path, os.W_OK):
+		if settings.force:
+			log("File %s is not writable. Opening anyway." % path)
+		else:
+			sys.stderr.write("File %s is not writable! Use -f/--force to open anyway.\n" % path)
+			continue
+
+	cmd = Command("open")
+	if   len(settings.name) > idx: cmd['display-name'] = settings.name[idx]
+	elif path == '-':              cmd['display-name'] = '%s:untitled (stdin)' % socket.gethostname()
+	else:                          cmd['display-name'] = '%s:%s' % (socket.gethostname(), path)
+	if   len(settings.type) > idx: cmd['file-type']    = settings.type[idx]
+	elif path == '-':              cmd['file-type']    = 'txt'
+	if   path != '-':              cmd['real-path']    = os.path.abspath(path)
+	if   len(settings.line) > idx: cmd['selection']    = settings.line[idx]
+
+	cmd["data-on-save"] = 'yes'
+	cmd["re-activate"] = 'yes'
+	cmd["token"] = path
+	if path == '-':
+		cmd.read_stdin()
+	elif os.path.isfile(path):
+		cmd.read_file(path)
+	else:
+		cmd['data'] = "0"
+	cmds.append(cmd)
+
+if not settings.wait and os.fork():
+	sys.exit()
+
+connect_and_handle_cmds(settings.host, settings.port, cmds)
