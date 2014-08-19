@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import argparse
+import getopt
 import os
 import socket
 import sys
@@ -13,8 +13,9 @@ else:
 	import ConfigParser as configparser
 	import StringIO as ioio
 
-DATE    = '2014-08-15'
-VERSION = "1.0.0"
+DATE           = '2014-08-18'
+VERSION        = '1.0.0'
+VERSION_STRING = 'rmate version %s (%s)' % (DATE, VERSION)
 
 def log(msg):
 	if settings.verbose:
@@ -99,6 +100,77 @@ def handle_cmds(textmate, host, port, cmds):
 	textmate.close()
 	log('Done')
 
+class Settings:
+	def __init__(self):
+		self.host    = 'localhost'
+		self.port    = 52698
+		self.wait    = False
+		self.force   = False
+		self.verbose = False
+		self.lines   = []
+		self.names   = []
+		self.types   = []
+		self.files   = []
+
+		self.read_disk_settings()
+
+		# Environment settings
+		self.host = os.getenv('RMATE_HOST', self.host)
+		self.port = os.getenv('RMATE_PORT', self.port)
+
+		self.parse_cli_options()
+		
+		if self.host == 'auto' and os.environ.get('SSH_CONNECTION') != None:
+			self.host = os.getenv('SSH_CONNECTION', 'localhost').split(' ')[0]
+
+	def usage(self):
+		print("usage: %s [OPTION]... FILE...\n\n"
+		      "      --host HOST  Connect to HOST. Use 'auto' to detect the host from\n"
+		      "                   SSH. Defaults to %s\n"
+		      "  -p, --port PORT  Port number to use for connection. Defaults to %d\n"
+		      "  -w, --[no-]wait  Wait for file to be closed by TextMate\n"
+		      "  -l, --line LINE  Place carat on line LINE after loading the file.\n"
+		      "                   TextMate selection strings can be used\n"
+		      "  -m, --name NAME  The display name shown in TextMate\n"
+		      "  -t, --type TYPE  Treat file as having TYPE\n"
+		      "  -f, --force      Open even if the file is not wratable\n"
+		      "  -v, --verbose    Verbose logging messages\n"
+		      "  -h, --help       Show this help and exit\n"
+		      "      --version    Show version and exit\n\n"
+		      "When FILE is -, read standard input.\n"
+		      % (sys.argv[0], self.host, self.port))
+
+	def read_disk_settings(self):
+		config = Parser()
+		try:
+			config.read(['/etc/rmate.rc', os.path.expanduser('~/.rmate.rc')])
+		except:
+			sys.stderr.write('Could not read settings from disk.\n')
+		if config.has_option('NOSECTION', 'host'): self.host = config.get('NOSECTION', 'host')
+		if config.has_option('NOSECTION', 'port'): self.port = config.get('NOSECTION', 'port')
+
+	def parse_cli_options(self):
+		try:
+			optlist, args = getopt.gnu_getopt(sys.argv[1:], 'hp:wl:m:t:fv', ['host=', 'port=', 'wait', 'no-wait', 'line=', 'name=', 'type=', 'force', 'verbose', 'help', 'version'])
+		except getopt.GetoptError:
+			self.usage()
+			sys.exit(2)
+
+		for name, value in optlist:
+			if name == '--version':           print(VERSION_STRING); sys.exit()
+			elif name in ('-h', '--help'):    self.usage(); sys.exit()
+			elif name == '--host':            self.host = value
+			elif name in ('-p', '--port'):    self.port = int(value)
+			elif name in ('-w', '--wait'):    self.wait = True
+			elif name == '--no-wait':         self.wait = False
+			elif name in ('-l', '--line'):    self.lines.append(value)
+			elif name in ('-m', '--name'):    self.names.append(value)
+			elif name in ('-t', '--type'):    self.types.append(value)
+			elif name in ('-f', '--force'):   self.force = True
+			elif name in ('-v', '--verbose'): self.verbose = True
+
+		self.files = args
+
 class Parser(configparser.ConfigParser):
 	def read(self, filenames):
 		if isinstance(filenames, str):
@@ -146,59 +218,10 @@ class Command:
 
 ## MAIN ##
 
-# Default settings
-host = 'localhost'
-port = 52698
+settings = Settings()
 
-# Disk settings
-config = Parser()
-try:
-	config.read(['/etc/rmate.rc', os.path.expanduser('~/.rmate.rc')])
-except:
-	sys.stderr.write('Could not read settings from disk.\n')
-if config.has_option('NOSECTION', 'host'): host = config.get('NOSECTION', 'host')
-if config.has_option('NOSECTION', 'port'): port = config.get('NOSECTION', 'port')
-
-# Environment settings
-host = os.getenv('RMATE_HOST', host)
-port = os.getenv('RMATE_PORT', port)
-
-# CLI settings
-parser = argparse.ArgumentParser(description='Activate TextMate from an SSH session', add_help=False)
-parser.add_argument('--host', default=host,
-                        help='Connect to host. Use \'auto\' to detect the host from SSH. Defaults to %s' % host)
-parser.add_argument('-p', '--port', type=int,
-                        help='Port number to use for connection. Defaults to %d' % port)
-parser.add_argument('-w', '--wait', action='store_true',
-                        help='Wait for file to be closed by TextMate.')
-parser.add_argument('-l', '--line', default=[], nargs='+', type=int, metavar='NUMBER',
-                        help='Place caret on line [NUMBER] after loading file.')
-parser.add_argument('-m', '--name', default=[], nargs='+',
-                        help='The display name shown in TextMate')
-parser.add_argument('-t', '--type', default=[], nargs='+', metavar='TYPE',
-                        help='Treat file as having [TYPE]')
-parser.add_argument('-f', '--force', action='store_true',
-                        help='Open even if the file is not writable.')
-parser.add_argument('-v', '--verbose', action='store_true',
-                        help='Verbose logging messages.')
-parser.add_argument('-h', '--help', action='help',
-                        help='Show this message.')
-parser.add_argument('--version', action='version', version=('rmate version %s (%s)' % (VERSION, DATE)),
-                        help='Show version.')
-parser.add_argument('file', nargs='*',
-                        help='File to open')
-settings = parser.parse_args()
-
-# Handle 'auto' host
-host = settings.host
-if host == 'auto' and os.environ.get('SSH_CONNECTION') != None:
-	host = os.getenv('SSH_CONNECTION', 'localhost').split(' ')[0]
-settings.host = host
-settings.port = port
-
-# Build the commands and send them
 cmds = []
-for idx, path in enumerate(settings.file):
+for idx, path in enumerate(settings.files):
 	if path == '-' and os.isatty(sys.stdin):
 		sys.stderr.write('Reading from stdin, press ^D to stop\n')
 	elif os.path.isdir(path):
@@ -212,13 +235,13 @@ for idx, path in enumerate(settings.file):
 			continue
 
 	cmd = Command("open")
-	if   len(settings.name) > idx: cmd['display-name'] = settings.name[idx]
-	elif path == '-':              cmd['display-name'] = '%s:untitled (stdin)' % socket.gethostname()
-	else:                          cmd['display-name'] = '%s:%s' % (socket.gethostname(), path)
-	if   len(settings.type) > idx: cmd['file-type']    = settings.type[idx]
-	elif path == '-':              cmd['file-type']    = 'txt'
-	if   path != '-':              cmd['real-path']    = os.path.abspath(path)
-	if   len(settings.line) > idx: cmd['selection']    = settings.line[idx]
+	if   len(settings.names) > idx: cmd['display-name'] = settings.names[idx]
+	elif path == '-':               cmd['display-name'] = '%s:untitled (stdin)' % socket.gethostname()
+	else:                           cmd['display-name'] = '%s:%s' % (socket.gethostname(), path)
+	if   len(settings.types) > idx: cmd['file-type']    = settings.types[idx]
+	elif path == '-':               cmd['file-type']    = 'txt'
+	if   path != '-':               cmd['real-path']    = os.path.abspath(path)
+	if   len(settings.lines) > idx: cmd['selection']    = settings.lines[idx]
 
 	cmd["data-on-save"] = 'yes'
 	cmd["re-activate"] = 'yes'
