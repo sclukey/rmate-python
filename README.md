@@ -1,6 +1,6 @@
 # rmate
 
-The `rmate` program enables editing files on a remote computer with TextMate 2 via an SSH connection. This Python implementation works with both Python 2 and Python 3.
+The `rmate` program enables editing files on a remote computer with TextMate 2 via an SSH connection. This Python implementation has been tested with versions 2.4-3.4.
 
 ## Setting up `rmate`
 
@@ -30,28 +30,19 @@ or by adding a rule to your `~/.ssh/config`
 
 You can use `rmate --help` to see the usage
 
-	usage: rmate [--host HOST] [-p PORT] [-w] [-l NUMBER [NUMBER ...]]
-	             [-m NAME [NAME ...]] [-t TYPE [TYPE ...]] [-f] [-v] [-h]
-	             [--version]
-	             [file [file ...]]
+	usage: rmate [OPTION]... FILE...
 	
-	Activate TextMate from an SSH session
+	      --host HOST  Connect to HOST. Use 'auto' to detect the host from
+	                   SSH. Defaults to localhost
+	  -p, --port PORT  Port number to use for connection. Defaults to 52698
+	  -w, --[no-]wait  Wait for file to be closed by TextMate
+	  -l, --line LINE  Place carat on line LINE after loading the file.
+	                   TextMate selection strings can be used
+	  -m, --name NAME  The display name shown in TextMate
+	  -t, --type TYPE  Treat file as having TYPE
+	  -f, --force      Open even if the file is not wratable
+	  -v, --verbose    Verbose logging messages
+	  -h, --help       Show this help and exit
+	      --version    Show version and exit
 	
-	positional arguments:
-	  file                  File to open
-	
-	optional arguments:
-	  --host HOST           Connect to host. Use 'auto' to detect the host from
-	                        SSH. Defaults to localhost
-	  -p PORT, --port PORT  Port number to use for connection. Defaults to 52698
-	  -w, --wait            Wait for file to be closed by TextMate.
-	  -l NUMBER [NUMBER ...], --line NUMBER [NUMBER ...]
-	                        Place caret on line [NUMBER] after loading file.
-	  -m NAME [NAME ...], --name NAME [NAME ...]
-	                        The display name shown in TextMate
-	  -t TYPE [TYPE ...], --type TYPE [TYPE ...]
-	                        Treat file as having [TYPE]
-	  -f, --force           Open even if the file is not writable.
-	  -v, --verbose         Verbose logging messages.
-	  -h, --help            Show this message.
-	  --version             Show version.
+	When FILE is -, read standard input.
