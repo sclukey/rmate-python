@@ -43,8 +43,8 @@ def handle_save(textmate, variables, data):
 		file = open(path, 'wb')
 		file.write(data)
 		if os.path.isfile(backup_path): os.remove(backup_path)
-	except (IOError, OSError) as e:
-		log("Save failed! %s" % e.strerror)
+	except (IOError, OSError):
+		log("Save failed!")
 
 def handle_close(textmate, variables, data):
 	path = variables['token']
@@ -52,7 +52,7 @@ def handle_close(textmate, variables, data):
 
 def handle_cmd(textmate, cmd):
 	variables = {}
-	data = b''
+	data = enc('')
 	for line in textmate:
 		line = dec(line)
 		if line.strip() == "": break
@@ -74,8 +74,8 @@ def connect_to_tm():
 		textmate_sock.connect((settings.host, settings.port))
 		textmate_sock.setblocking(True)
 		textmate = textmate_sock.makefile('rwb')
-	except socket.error as e:
-		sys.stderr.write("Error connecting to TextMate! %s\n" % e)
+	except socket.error:
+		sys.stderr.write("Error connecting to TextMate!\n")
 		exit(1)
 
 	server_info = dec(textmate.readline())
@@ -178,9 +178,10 @@ class Parser(configparser.ConfigParser):
 		read_ok = []
 		for filename in filenames:
 			try:
-				with open(filename) as file:
-					fp = ioio.StringIO("[NOSECTION]\n" + file.read())
-					self._read(fp, filename)
+				file = open(filename)
+				fp = ioio.StringIO("[NOSECTION]\n" + file.read())
+				self._read(fp, filename)
+				file.close()
 			except:
 				continue
 			read_ok.append(filename)
