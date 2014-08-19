@@ -169,6 +169,7 @@ class Settings:
 			elif name in ('-f', '--force'):   self.force = True
 			elif name in ('-v', '--verbose'): self.verbose = True
 
+		if '-' in sys.argv[1:] and '-' not in args: args.append('-')
 		self.files = args
 
 class Parser(configparser.ConfigParser):
@@ -198,7 +199,7 @@ class Command:
 		self.variables[index] = value
 
 	def read_stdin(self):
-		self.data = sys.stdin.read()
+		self.data = enc(sys.stdin.read())
 		self.size = len(self.data)
 
 	def read_file(self, path):
@@ -223,7 +224,7 @@ settings = Settings()
 
 cmds = []
 for idx, path in enumerate(settings.files):
-	if path == '-' and os.isatty(sys.stdin):
+	if path == '-' and sys.stdin.isatty():
 		sys.stderr.write('Reading from stdin, press ^D to stop\n')
 	elif os.path.isdir(path):
 		sys.stderr.write("'%s' is a directory!\n" % path)
