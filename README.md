@@ -8,7 +8,7 @@ The `rmate` program enables editing files on a remote computer with TextMate 2 v
 
 To use `rmate`, you need to copy the script to the remote machine and make it executable
 
-	wget https://raw.github.com/sclukey/rmate/master/rmate
+	wget https://raw.github.com/sclukey/rmate-python/master/rmate
 	chmod +x ./rmate
 
 The make the script accessible from anywhere, simply move it to a location within your `PATH` environment variable
@@ -46,3 +46,5 @@ You can use `rmate --help` to see the usage
 	      --version    Show version and exit
 	
 	When FILE is -, read standard input.
+
+More information can be found in [this blog post](http://blog.macromates.com/2011/mate-and-rmate/)
