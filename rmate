@@ -14,9 +14,9 @@ else:
 	import ConfigParser as configparser
 	import StringIO as ioio
 
-DATE           = '2014-08-18'
-VERSION        = '1.0.0'
-VERSION_STRING = 'rmate version %s (%s)' % (DATE, VERSION)
+DATE           = '2014-08-30'
+VERSION        = '1.0.1'
+VERSION_STRING = 'rmate-python version %s (%s)' % (DATE, VERSION)
 
 def log(msg):
 	if settings.verbose:
