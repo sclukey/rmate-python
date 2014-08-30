@@ -5,6 +5,7 @@ import os
 import socket
 import sys
 import shutil
+import tempfile
 
 if sys.version_info >= (3,0):
 	import configparser
@@ -35,6 +36,16 @@ def dec(byte_string):
 
 def handle_save(textmate, variables, data):
 	path = variables['token']
+
+	if path == '|':
+		if settings.tmpFile is not None:
+			settings.tmpFile.seek(0)
+			settings.tmpFile.truncate()
+			settings.tmpFile.write(data)
+		else:
+			log("Save failed!")
+		return
+
 	try:
 		log('Saving %s' % path)
 		backup_path = '%s~' % path
@@ -48,6 +59,13 @@ def handle_save(textmate, variables, data):
 
 def handle_close(textmate, variables, data):
 	path = variables['token']
+
+	if path == '|' and settings.tmpFile is not None:
+		settings.tmpFile.seek(0)
+		print(dec(settings.tmpFile.read()))
+		settings.tmpFile.close()
+		settings.tmpFile = None
+
 	log("Closed %s" % path)
 
 def handle_cmd(textmate, cmd):
@@ -85,7 +103,7 @@ def connect_to_tm():
 		exit(1)
 
 	log('Connect: %s' % server_info)
-	
+
 	return textmate
 
 def handle_cmds(textmate, host, port, cmds):
@@ -111,6 +129,7 @@ class Settings:
 		self.names   = []
 		self.types   = []
 		self.files   = []
+		self.tmpFile = None
 
 		self.read_disk_settings()
 
@@ -119,7 +138,7 @@ class Settings:
 		self.port = os.getenv('RMATE_PORT', self.port)
 
 		self.parse_cli_options()
-		
+
 		if self.host == 'auto' and os.environ.get('SSH_CONNECTION') != None:
 			self.host = os.getenv('SSH_CONNECTION', 'localhost').split(' ')[0]
 
@@ -258,6 +277,13 @@ for idx, path in enumerate(settings.files):
 		cmd.read_file(path)
 	else:
 		cmd['data'] = "0"
+
+	if path == '-' and not sys.stdout.isatty() and settings.tmpFile is None:
+		settings.tmpFile = tempfile.TemporaryFile()
+		settings.tmpFile.write(cmd.data)
+		settings.tmpFile.seek(0)
+		cmd["token"] = '|'
+
 	cmds.append(cmd)
 
 s = connect_to_tm()
