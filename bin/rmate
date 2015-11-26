@@ -239,8 +239,6 @@ class Command:
 		textmate.write(enc('\n'))
 
 def main():
-	settings = Settings()
-
 	cmds = []
 	for idx, path in enumerate(settings.files):
 		if path == '=':
@@ -293,4 +291,5 @@ def main():
 	handle_cmds(s, settings.host, settings.port, cmds)
 
 if __name__ == "__main__":
-    main()
+	settings = Settings()
+	main()
