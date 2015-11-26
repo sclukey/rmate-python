@@ -135,7 +135,7 @@ class Settings:
 
 		# Environment settings
 		self.host = os.getenv('RMATE_HOST', self.host)
-		self.port = os.getenv('RMATE_PORT', self.port)
+		self.port = int(os.getenv('RMATE_PORT', self.port))
 
 		self.parse_cli_options()
 
