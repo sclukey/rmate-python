@@ -238,57 +238,59 @@ class Command:
 			textmate.write(self.data)
 		textmate.write(enc('\n'))
 
-## MAIN ##
+def main():
+	settings = Settings()
 
-settings = Settings()
-
-cmds = []
-for idx, path in enumerate(settings.files):
-	if path == '=':
-		if sys.stdin.isatty(): continue
-		else: path = '-'
-	elif path == '-' and sys.stdin.isatty():
-		sys.stderr.write('Reading from stdin, press ^D to stop\n')
-	elif os.path.isdir(path):
-		sys.stderr.write("'%s' is a directory!\n" % path)
-		continue
-	elif os.path.isfile(path) and not os.access(path, os.W_OK):
-		if settings.force:
-			log("File %s is not writable. Opening anyway." % path)
-		else:
-			sys.stderr.write("File %s is not writable! Use -f/--force to open anyway.\n" % path)
+	cmds = []
+	for idx, path in enumerate(settings.files):
+		if path == '=':
+			if sys.stdin.isatty(): continue
+			else: path = '-'
+		elif path == '-' and sys.stdin.isatty():
+			sys.stderr.write('Reading from stdin, press ^D to stop\n')
+		elif os.path.isdir(path):
+			sys.stderr.write("'%s' is a directory!\n" % path)
 			continue
+		elif os.path.isfile(path) and not os.access(path, os.W_OK):
+			if settings.force:
+				log("File %s is not writable. Opening anyway." % path)
+			else:
+				sys.stderr.write("File %s is not writable! Use -f/--force to open anyway.\n" % path)
+				continue
 
-	cmd = Command("open")
-	if   len(settings.names) > idx: cmd['display-name'] = settings.names[idx]
-	elif path == '-':               cmd['display-name'] = '%s:untitled (stdin)' % socket.gethostname()
-	else:                           cmd['display-name'] = '%s:%s' % (socket.gethostname(), path)
-	if   len(settings.types) > idx: cmd['file-type']    = settings.types[idx]
-	elif path == '-':               cmd['file-type']    = 'txt'
-	if   path != '-':               cmd['real-path']    = os.path.abspath(path)
-	if   len(settings.lines) > idx: cmd['selection']    = settings.lines[idx]
+		cmd = Command("open")
+		if   len(settings.names) > idx: cmd['display-name'] = settings.names[idx]
+		elif path == '-':               cmd['display-name'] = '%s:untitled (stdin)' % socket.gethostname()
+		else:                           cmd['display-name'] = '%s:%s' % (socket.gethostname(), path)
+		if   len(settings.types) > idx: cmd['file-type']    = settings.types[idx]
+		elif path == '-':               cmd['file-type']    = 'txt'
+		if   path != '-':               cmd['real-path']    = os.path.abspath(path)
+		if   len(settings.lines) > idx: cmd['selection']    = settings.lines[idx]
 
-	cmd["data-on-save"] = 'yes'
-	cmd["re-activate"] = 'yes'
-	cmd["token"] = path
-	if path == '-':
-		cmd.read_stdin()
-	elif os.path.isfile(path):
-		cmd.read_file(path)
-	else:
-		cmd['data'] = "0"
+		cmd["data-on-save"] = 'yes'
+		cmd["re-activate"] = 'yes'
+		cmd["token"] = path
+		if path == '-':
+			cmd.read_stdin()
+		elif os.path.isfile(path):
+			cmd.read_file(path)
+		else:
+			cmd['data'] = "0"
 
-	if path == '-' and not sys.stdout.isatty() and settings.tmpFile is None:
-		settings.tmpFile = tempfile.TemporaryFile()
-		settings.tmpFile.write(cmd.data)
-		settings.tmpFile.seek(0)
-		cmd["token"] = '|'
+		if path == '-' and not sys.stdout.isatty() and settings.tmpFile is None:
+			settings.tmpFile = tempfile.TemporaryFile()
+			settings.tmpFile.write(cmd.data)
+			settings.tmpFile.seek(0)
+			cmd["token"] = '|'
 
-	cmds.append(cmd)
+		cmds.append(cmd)
 
-s = connect_to_tm()
+	s = connect_to_tm()
 
-if not settings.wait and os.fork():
-	sys.exit()
+	if not settings.wait and os.fork():
+		sys.exit()
 
-handle_cmds(s, settings.host, settings.port, cmds)
+	handle_cmds(s, settings.host, settings.port, cmds)
+
+if __name__ == "__main__":
+    main()
