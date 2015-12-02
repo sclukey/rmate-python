@@ -86,15 +86,22 @@ def handle_cmd(textmate, cmd):
 	elif cmd == 'close': handle_close(textmate, variables, data)
 
 def connect_to_tm():
-	try:
-		socket.setdefaulttimeout(5)
-		textmate_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		textmate_sock.connect((settings.host, settings.port))
-		textmate_sock.setblocking(True)
-		textmate = textmate_sock.makefile('rwb')
-	except socket.error:
-		sys.stderr.write("Error connecting to TextMate!\n")
-		exit(1)
+	socket.setdefaulttimeout(5)
+
+	error = 0
+	for option in socket.getaddrinfo(settings.host, settings.port, 0, socket.SOCK_STREAM):
+		family, socktype, proto, canonname, sockaddr = option
+
+		tm_sock = socket.socket(family, socktype, proto)
+		error = tm_sock.connect_ex(sockaddr)
+		if error == 0:
+			break
+
+	if error:
+		raise Exception('Could not connect to textmate: %s' % (os.strerror(error)))
+
+	tm_sock.setblocking(True)
+	textmate = tm_sock.makefile('rwb')
 
 	server_info = dec(textmate.readline())
 
