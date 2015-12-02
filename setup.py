@@ -22,8 +22,6 @@ setup(
     license='MIT',
 
     classifiers=[
-        'Development Status :: 4 - Beta',
-        'Intended Audience :: Developers',
         'Topic :: Utilities',
         'Environment :: Console',
         'Operating System :: POSIX',
