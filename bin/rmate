@@ -169,7 +169,7 @@ class Settings:
 	def read_disk_settings(self):
 		config = Parser()
 		try:
-			config.read(['/etc/rmate.rc', os.path.expanduser('~/.rmate.rc')])
+			config.read(['/etc/rmate.rc', '/usr/local/etc/rmate.rc', os.path.expanduser('~/.rmate.rc')])
 		except:
 			sys.stderr.write('Could not read settings from disk.\n')
 		if config.has_option('NOSECTION', 'host'): self.host = config.get('NOSECTION', 'host')
