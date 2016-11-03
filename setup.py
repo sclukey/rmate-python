@@ -10,7 +10,7 @@ with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
 
 setup(
     name='rmate',
-    version='1.0.2',
+    version='1.0.3',
     url='https://github.com/sclukey/rmate-python',
 
     description='Edit files over SSH.',
