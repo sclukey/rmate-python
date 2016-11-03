@@ -58,15 +58,17 @@ def handle_save(textmate, variables, data):
 		log("Save failed!")
 
 def handle_close(textmate, variables, data):
-	path = variables['token']
-
-	if path == '|' and settings.tmpFile is not None:
+	if settings.tmpFile is not None:
 		settings.tmpFile.seek(0)
 		print(dec(settings.tmpFile.read()))
 		settings.tmpFile.close()
 		settings.tmpFile = None
 
-	log("Closed %s" % path)
+	if 'token' in variables:
+		path = variables['token']
+		log("Closed %s" % path)
+	else:
+		log("Unknown file closed")
 
 def handle_cmd(textmate, cmd):
 	variables = {}
